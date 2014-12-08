@@ -13,3 +13,5 @@
 */.cache
 deploy
 target/
+.scala_dependencies
+.project

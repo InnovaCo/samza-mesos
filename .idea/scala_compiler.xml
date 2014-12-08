@@ -4,6 +4,7 @@
     <parameters>
       <parameter value="-make:transitive" />
       <parameter value="-dependencyfile" />
+      <parameter value="$PROJECT_DIR$/target/.scala_dependencies" />
     </parameters>
   </component>
 </project>
