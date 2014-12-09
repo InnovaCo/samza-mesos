@@ -14,8 +14,8 @@
     <orderEntry type="library" name="Maven: org.scala-lang:scala-library:2.10.4" level="project" />
     <orderEntry type="library" scope="TEST" name="Maven: org.scalatest:scalatest_2.10:2.2.2" level="project" />
     <orderEntry type="library" scope="TEST" name="Maven: org.scala-lang:scala-reflect:2.10.4" level="project" />
-    <orderEntry type="library" name="Maven: org.apache.samza:samza-api:0.8.0-SNAPSHOT" level="project" />
-    <orderEntry type="library" name="Maven: org.apache.samza:samza-core_2.10:0.8.0-SNAPSHOT" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.samza:samza-api:0.9.0-SNAPSHOT" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.samza:samza-core_2.10:0.9.0-SNAPSHOT" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: net.sf.jopt-simple:jopt-simple:3.2" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.codehaus.jackson:jackson-mapper-asl:1.8.5" level="project" />
     <orderEntry type="library" scope="RUNTIME" name="Maven: org.codehaus.jackson:jackson-core-asl:1.8.5" level="project" />

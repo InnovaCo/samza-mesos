@@ -11,7 +11,7 @@ Early development. Not tested in production. Hints/issues/PRs are welcome.
 
 Make sure you've installed JDK 1.6+ (tested with Oracle JDK 1.7) and Maven.
 
-First, Samza version 0.8.* is required to build and use this package. It is not yet released in Maven repo, so
+First, Samza version 0.9.* is required to build and use this package. (If) it is not yet released in Maven repo,
 you need to make sure it is available from your local repo:
 
     git clone https://github.com/apache/incubator-samza.git
@@ -50,14 +50,14 @@ Suppose your job package includes directories:
 - **bin** - containing standard Samza distributed shell scripts (see [hello-samza](https://github.com/apache/incubator-samza-hello-samza))
 - **config** - with your job configuration file(s)
 
-A shell script to start your job locally using Marathon should look something like this:
+A shell script to start your job locally using Marathon might look something like this:
 
 ```shell
 #!/bin/bash
 PACKAGE_PATH=$(readlink -e "path/to/built/package/sample-job-X.X.X.tar.gz")
 curl -X POST -H "Content-type: application/json" localhost:8080/v2/apps --data @- <<- EOF
 {
-  "id": "job-name-0.1",
+  "id": "sample-job-X.X.X",
   "cmd": "cd bin && ./run-job.sh --config-factory=org.apache.samza.config.factories.PropertiesConfigFactory --config-path=file://$PWD/../config/sample-job.properties",
   "mem": 512,
   "cpus": 1.0,

@@ -23,7 +23,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.version>1.6</java.version>
     <scala.version>2.10.4</scala.version>
-    <samza.version>0.8.0-SNAPSHOT</samza.version>
+    <samza.version>0.9.0-SNAPSHOT</samza.version>
     <mesos.version>0.20.1</mesos.version>
   </properties>
 
