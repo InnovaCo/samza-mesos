@@ -16,7 +16,10 @@ you need to make sure it is available from your local repo:
 
     git clone https://github.com/apache/incubator-samza.git
     cd incubator-samza
+    git reset --hard 377e5cc3f56549a02cbbb79cc3dc7166df7da585
     ./gradlew -PscalaVersion=2.10 clean publishToMavenLocal
+
+Note that we're resetting to specific commit to avoid possible breaking changes.
 
 Then you can build Samza-Mesos from sources:
 
