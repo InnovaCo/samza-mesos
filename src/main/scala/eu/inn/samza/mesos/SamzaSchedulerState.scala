@@ -31,7 +31,7 @@ import scala.collection.mutable
 import scala.collection.JavaConversions._
 
 class SamzaSchedulerState(config: Config) extends Logging {
-  var currentStatus: ApplicationStatus = New
+  @volatile var currentStatus: ApplicationStatus = New
   var isHealthy = false
 
   val initialTaskCount: Int = config.getTaskCount.getOrElse({

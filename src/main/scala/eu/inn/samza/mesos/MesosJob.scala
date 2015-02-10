@@ -19,8 +19,6 @@
 
 package eu.inn.samza.mesos
 
-import java.util.Calendar
-
 import eu.inn.samza.mesos.MesosConfig.Config2Mesos
 import eu.inn.samza.mesos.mapping.{DefaultResourceMappingStrategy, TaskOfferMapper}
 import org.apache.mesos.MesosSchedulerDriver
@@ -39,6 +37,13 @@ class MesosJob(config: Config) extends StreamJob with Logging {
   val driver = new MesosSchedulerDriver(scheduler, frameworkInfo,
     config.getMasterConnect.getOrElse("zk://localhost:2181/mesos"))
 
+  private lazy val version = System.currentTimeMillis()
+
+  sys.addShutdownHook {
+    info("Termination signal received. Shutting down.")
+    kill
+  }
+
   def getStatus: ApplicationStatus = {
     state.currentStatus
   }
@@ -46,7 +51,7 @@ class MesosJob(config: Config) extends StreamJob with Logging {
   def getFrameworkInfo: FrameworkInfo = {
     val frameworkName = config.getName.get
     val frameworkId = FrameworkID.newBuilder
-      .setValue("%s-%d" format(frameworkName, Calendar.getInstance().getTimeInMillis))
+      .setValue("%s-%d" format(frameworkName, version))
       .build
 
     val infoBuilder = FrameworkInfo.newBuilder
@@ -64,18 +69,25 @@ class MesosJob(config: Config) extends StreamJob with Logging {
     new TaskOfferMapper(new DefaultResourceMappingStrategy)
       .addCpuConstraint(config.getExecutorMaxCpuCores)
       .addMemConstraint(config.getExecutorMaxMemoryMb)
+      .addDiskConstraint(config.getExecutorMaxDiskMb)
       .addAttributeConstraint(config.getExecutorAttributes.toSeq: _*)
   }
 
   def kill: StreamJob = {
+    info("Killing current job")
     state.jobCoordinator.stop
-    driver.stop
+    driver.abort()
+    state.preparedTasks.values.foreach(t => driver.killTask(t.getTaskId))
+    driver.stop()
+    state.currentStatus = ApplicationStatus.SuccessfulFinish
     this
   }
 
   def submit: StreamJob = {
+    info("Submitting new job")
     state.jobCoordinator.start
-    driver.run
+    driver.start()
+    state.currentStatus = ApplicationStatus.Running
     this
   }
 

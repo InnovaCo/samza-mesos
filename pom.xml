@@ -9,7 +9,7 @@
 
   <groupId>eu.inn</groupId>
   <artifactId>samza-mesos</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.2.0-SNAPSHOT</version>
 
   <name>Samza Mesos framework</name>
   <description>
@@ -109,9 +109,11 @@
             </goals>
             <configuration>
               <args>
-                <arg>-make:transitive</arg>
-                <arg>-dependencyfile</arg>
-                <arg>${project.build.directory}/.scala_dependencies</arg>
+                <arg>-feature</arg>
+                <arg>-deprecation</arg>
+                <arg>-language:implicitConversions</arg>
+                <arg>-language:postfixOps</arg>
+                <arg>-language:reflectiveCalls</arg>
               </args>
               <scalaVersion>${scala.version}</scalaVersion>
             </configuration>

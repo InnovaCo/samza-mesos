@@ -33,7 +33,9 @@ class MesosTask(config: Config,
                 state: SamzaSchedulerState,
                 val samzaTaskId: Int) {
 
-  def getMesosTaskName: String = "%s-task-%d" format(config.getName.get, samzaTaskId)
+  private lazy val version = System.currentTimeMillis()
+
+  def getMesosTaskName: String = "%s-task-%d-%d" format(config.getName.get, samzaTaskId, version)
 
   def getMesosTaskId: String = getMesosTaskName
 

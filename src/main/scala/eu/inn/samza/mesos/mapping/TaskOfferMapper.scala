@@ -41,10 +41,6 @@ class TaskOfferMapper(strategy: ResourceMappingStrategy) {
 
   private val constraints = new ResourceConstraints
 
-  // not sure if this is a good idea
-  addCpuConstraint(1.0)
-  addMemConstraint(1024.0)
-
   def addCpuConstraint(cores: Double): TaskOfferMapper = {
     constraints.requireResource("cpus", cores)
     this

@@ -21,7 +21,7 @@ package eu.inn.samza.mesos
 
 import eu.inn.samza.mesos.mapping.{TempResourceHolder, ResourceConstraints, DefaultResourceMappingStrategy}
 import org.scalatest.FunSpec
-import org.scalatest.matchers.ShouldMatchers
+import org.scalatest.ShouldMatchers
 
 class MappingSpec extends FunSpec with ShouldMatchers {
 
