@@ -60,14 +60,11 @@ class SamzaScheduler(config: Config,
     // todo: else what?
   }
 
-  private def allocateResources(driver: SchedulerDriver): Unit = {
+  private def allocateResources(driver: SchedulerDriver, offers: util.List[Offer]): Unit = {
     info("Trying to allocate tasks using existing offers.")
 
-    offerMapper.mapResources(state.offerPool.values.toList, state.filterTasks(state.unclaimedTasks.toSeq))
+    offerMapper.mapResources(offers.toList, state.filterTasks(state.unclaimedTasks.toSeq))
       .foreach(kv => {
-
-      state.offerPool -= kv._1.getId
-
       if (kv._2.isEmpty) {
         debug("Resource constraints have not been satisfied by offer %s. Declining." format kv._1.getId.getValue)
         driver.declineOffer(kv._1.getId)
@@ -79,18 +76,14 @@ class SamzaScheduler(config: Config,
   }
 
   def resourceOffers(driver: SchedulerDriver, offers: util.List[Offer]) {
-
-    state.offerPool.keys.foreach(driver.declineOffer)
-    state.offerPool.clear() // todo: not sure
-    state.offerPool ++= offers.map(o => (o.getId, o))
-
-    if (state.unclaimedTasks.nonEmpty)
-      allocateResources(driver)
+    if (state.unclaimedTasks.nonEmpty) {
+      allocateResources(driver, offers)
+    } else {
+      offers.foreach(o => driver.declineOffer(o.getId))
+    }
   }
 
-  def offerRescinded(driver: SchedulerDriver, offer: OfferID): Unit = {
-    state.offerPool -= offer
-  }
+  def offerRescinded(driver: SchedulerDriver, offer: OfferID): Unit = {}
 
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus) {
     val taskId = status.getTaskId.getValue
@@ -108,7 +101,6 @@ class SamzaScheduler(config: Config,
         state.unclaimedTasks += taskId
         state.pendingTasks -= taskId
         state.runningTasks -= taskId
-        allocateResources(driver) // maybe we already have interesting offers
       case _ =>
     }
 

@@ -41,11 +41,11 @@ object MesosConfig {
 }
 
 class MesosConfig(config: Config) extends JobConfig(config) {
-  def getExecutorMaxMemoryMb: Int = getOption(MesosConfig.EXECUTOR_MAX_MEMORY_MB).map(_.toInt).getOrElse(1024)
+  def getExecutorMaxMemoryMb: Double = getOption(MesosConfig.EXECUTOR_MAX_MEMORY_MB).map(_.toDouble).getOrElse(1024)
 
-  def getExecutorMaxCpuCores: Int = getOption(MesosConfig.EXECUTOR_MAX_CPU_CORES).map(_.toInt).getOrElse(1)
+  def getExecutorMaxCpuCores: Double = getOption(MesosConfig.EXECUTOR_MAX_CPU_CORES).map(_.toDouble).getOrElse(1)
 
-  def getExecutorMaxDiskMb: Int = getOption(MesosConfig.EXECUTOR_MAX_DISK_MB).map(_.toInt).getOrElse(1024)
+  def getExecutorMaxDiskMb: Double = getOption(MesosConfig.EXECUTOR_MAX_DISK_MB).map(_.toDouble).getOrElse(1024)
 
   def getExecutorAttributes: Map[String, String] = {
     subset(MesosConfig.EXECUTOR_ATTRIBUTES, true).entrySet().map(e => (e.getKey, e.getValue)).toMap

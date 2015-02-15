@@ -20,15 +20,15 @@
 package eu.inn.samza.mesos
 
 import eu.inn.samza.mesos.MesosConfig.Config2Mesos
-import org.apache.mesos.Protos.{OfferID, Offer, TaskInfo}
+import org.apache.mesos.Protos.TaskInfo
 import org.apache.samza.config.Config
 import org.apache.samza.coordinator.JobCoordinator
 import org.apache.samza.job.ApplicationStatus
 import org.apache.samza.job.ApplicationStatus._
 import org.apache.samza.util.Logging
 
-import scala.collection.mutable
 import scala.collection.JavaConversions._
+import scala.collection.mutable
 
 class SamzaSchedulerState(config: Config) extends Logging {
   @volatile var currentStatus: ApplicationStatus = New
@@ -53,8 +53,6 @@ class SamzaSchedulerState(config: Config) extends Logging {
   val unclaimedTasks: mutable.Set[String] = mutable.Set(tasks.keys.toSeq: _*)
   val pendingTasks: mutable.Set[String] = mutable.Set()
   val runningTasks: mutable.Set[String] = mutable.Set()
-
-  val offerPool: mutable.Map[OfferID, Offer] = mutable.Map()
 
   def filterTasks(ids: Seq[String]): Set[MesosTask] =
     tasks.filterKeys(ids.contains).map(_._2).toSet
