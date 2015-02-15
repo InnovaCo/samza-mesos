@@ -1,22 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package eu.inn.samza.mesos
 
 import eu.inn.samza.mesos.MesosConfig.Config2Mesos
@@ -27,15 +8,13 @@ import org.apache.samza.config.Config
 import org.apache.samza.job.ApplicationStatus._
 import org.apache.samza.job.{ApplicationStatus, StreamJob}
 import org.apache.samza.util.Logging
+import eu.inn.samza.mesos.MesosConfig.config2Mesos
+import eu.inn.samza.mesos.allocation.{ResourceConstraints, ResourceMappingStrategy, MesosOfferMapper}
+
 
 class MesosJob(config: Config) extends StreamJob with Logging {
 
-  val state = new SamzaSchedulerState(config)
-  val frameworkInfo = getFrameworkInfo
-  val offerMapper = createOfferMapper
-  val scheduler = new SamzaScheduler(config, state, offerMapper)
-  val driver = new MesosSchedulerDriver(scheduler, frameworkInfo,
-    config.getMasterConnect.getOrElse("zk://localhost:2181/mesos"))
+  val state = SamzaSchedulerState(config)
 
   private lazy val version = System.currentTimeMillis()
 
@@ -54,32 +33,73 @@ class MesosJob(config: Config) extends StreamJob with Logging {
       .setValue("%s-%d" format(frameworkName, version))
       .build
 
-    val infoBuilder = FrameworkInfo.newBuilder
+    FrameworkInfo.newBuilder
       .setName(frameworkName)
       .setId(frameworkId)
-      .setUser(config.getUser)
-      .setFailoverTimeout(config.getFailoverTimeout)
-
-    config.getRole.foreach(infoBuilder.setRole)
-
-    infoBuilder.build
+      .setUser(config.schedulerUser)
+      .setFailoverTimeout(0)
+      .setRole(config.schedulerRole)
+      .build
   }
 
-  def createOfferMapper: TaskOfferMapper = {
-    new TaskOfferMapper(new DefaultResourceMappingStrategy)
-      .addCpuConstraint(config.getExecutorMaxCpuCores)
-      .addMemConstraint(config.getExecutorMaxMemoryMb)
-      .addDiskConstraint(config.getExecutorMaxDiskMb)
-      .addAttributeConstraint(config.getExecutorAttributes.toSeq: _*)
+  val offerMapper = {
+    val strategy = Class.forName(config.schedulerStrategy).newInstance().asInstanceOf[ResourceMappingStrategy]
+
+    val initialConstraints = ResourceConstraints(
+      Map(
+      "cpus" → config.containerMaxCpuCores,
+      "mem" → config.containerMaxMemoryMb,
+      "disk" → config.containerMaxDiskMb
+      ),
+      config.containerAttributes
+    )
+
+    val fullConstraints = config.containerConstraintsResolvers.foldLeft(initialConstraints)((c, r) ⇒ r.resolve(c))
+
+    new MesosOfferMapper(fullConstraints, strategy)
+  }
+
+  info(s"Create SamzaScheduler with $config")
+
+  info(s"Using allocation strategy ${config.schedulerStrategy}")
+
+  val registry = ZooRegistry(config)
+
+  val scheduler = new SamzaScheduler(config, state, offerMapper, registry)
+
+  val driver = new MesosSchedulerDriver(scheduler, frameworkInfo, config.masterConnect.getOrElse("zk://localhost:2181/mesos"))
+
+  private lazy val version = System.currentTimeMillis()
+
+  sys.addShutdownHook {
+    info("Termination signal received. Shutting down.")
+    kill
+    waitForFinish(30000) match {
+      case Running ⇒ warn("Job is still RUNNING")
+      case SuccessfulFinish ⇒ info("Job is SUCCESSFULLY FINISHED")
+      case UnsuccessfulFinish ⇒ warn("Job is UNSUCCESSFULLY FINISHED")
+      case status ⇒ warn(s"Job is in status: $status")
+    }
   }
 
   def kill: StreamJob = {
     info("Killing current job")
-    state.jobCoordinator.stop
+
+    state.shutdown(driver)
+
+    while (!state.isSafeToStop) { // todo: refactor
+      info("Waiting for all tasks to gracefully stop")
+      Thread.sleep(1000)
+    }
+
+    info("Aborting Mesos driver")
     driver.abort()
-    state.preparedTasks.values.foreach(t => driver.killTask(t.getTaskId))
+
+    info("Stopping Mesos driver")
     driver.stop()
     state.currentStatus = ApplicationStatus.SuccessfulFinish
+
+    info("Done killing current job")
     this
   }
 
@@ -106,18 +126,17 @@ class MesosJob(config: Config) extends StreamJob with Logging {
     Running
   }
 
-  def waitForStatus(status: ApplicationStatus, timeoutMs: Long): ApplicationStatus = {
-    val startTimeMs = System.currentTimeMillis()
-
-    while (System.currentTimeMillis() - startTimeMs < timeoutMs) {
+  @annotation.tailrec
+  private def checkStatus(startTimeMs: Long, timeoutMs: Long)(predicate: ApplicationStatus ⇒ Boolean): ApplicationStatus = {
+    info(s"Starting waiting for $timeoutMs ms. Current status  $getStatus")
+    if (System.currentTimeMillis - startTimeMs < timeoutMs) {
       Option(getStatus) match {
-        case Some(s) => if (status.equals(s)) return status
-        case None =>
+        case Some(s) if predicate(s) ⇒ s
+        case other ⇒
+          info(s"Waiting for $timeoutMs ms. Current status $other")
+          Thread.sleep(1000)
+          checkStatus(startTimeMs, timeoutMs)(predicate)
       }
-
-      Thread.sleep(1000)
-    }
-
-    Running
+    } else Running
   }
 }

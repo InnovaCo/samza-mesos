@@ -1,68 +1,72 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package eu.inn.samza.mesos
 
-import org.apache.samza.config.{JobConfig, Config}
+import eu.inn.samza.mesos.allocation.{ConstraintsResolver, ConstraintsResolverFactory, RoundRobin}
+import org.apache.samza.config.{Config, JobConfig}
+
 import scala.collection.JavaConversions._
 
+
 object MesosConfig {
-  val PACKAGE_PATH = "mesos.package.path"
-  val MASTER_CONNECT = "mesos.master.connect"
+  val PACKAGE_PATH                        = "mesos.package.path"
+  val MASTER_CONNECT                      = "mesos.master.connect"
+  val REGISTRY_CONNECT                    = "mesos.registry.connect"
 
-  val EXECUTOR_MAX_MEMORY_MB = "mesos.executor.memory.mb"
-  val EXECUTOR_MAX_CPU_CORES = "mesos.executor.cpu.cores"
-  val EXECUTOR_MAX_DISK_MB = "mesos.executor.disk.mb"
-  val EXECUTOR_ATTRIBUTES = "mesos.executor.attributes"
-  val EXECUTOR_TASK_COUNT = "mesos.executor.count"
+  val CONTAINER_MAX_MEMORY_MB             = "mesos.container.memory.mb"
+  val CONTAINER_MAX_CPU_CORES             = "mesos.container.cpu.cores"
+  val CONTAINER_MAX_DISK_MB               = "mesos.container.disk.mb"
+  val CONTAINER_ATTRIBUTES                = "mesos.container.attributes"
+  val CONTAINER_ENVIRONMENT_SHARED        = "mesos.container.environment.shared"
+  val CONTAINER_CONSTRAINTS_RESOLVERS     = "mesos.container.constraints-resolvers"
 
-  val SCHEDULER_USER = "mesos.scheduler.user"
-  val SCHEDULER_ROLE = "mesos.scheduler.role"
-  val SCHEDULER_JMX_ENABLED = "mesos.scheduler.jmx.enabled"
-  val SCHEDULER_FAILOVER_TIMEOUT = "mesos.scheduler.failover.timeout"
+  val SCHEDULER_USER                      = "mesos.user"
+  val SCHEDULER_ROLE                      = "mesos.role"
+  val SCHEDULER_RESERVATION_ENABLED       = "mesos.reservation.enabled"
+  val SCHEDULER_RESERVATION_DELAY         = "mesos.reservation.delay"
+  val SCHEDULER_VOLUMES_ENABLED           = "mesos.volumes.enabled"
+  val SCHEDULER_VOLUMES_PATH              = "mesos.volumes.path"
+  val SCHEDULER_STRATEGY                  = "mesos.strategy"
 
   implicit def Config2Mesos(config: Config) = new MesosConfig(config)
 }
 
 class MesosConfig(config: Config) extends JobConfig(config) {
-  def getExecutorMaxMemoryMb: Double = getOption(MesosConfig.EXECUTOR_MAX_MEMORY_MB).map(_.toDouble).getOrElse(1024)
 
-  def getExecutorMaxCpuCores: Double = getOption(MesosConfig.EXECUTOR_MAX_CPU_CORES).map(_.toDouble).getOrElse(1)
+  private def jobName = getName.getOrElse("No job.name defined!")
 
-  def getExecutorMaxDiskMb: Double = getOption(MesosConfig.EXECUTOR_MAX_DISK_MB).map(_.toDouble).getOrElse(1024)
+  def containerMaxMemoryMb: Int = getOption(MesosConfig.CONTAINER_MAX_MEMORY_MB).map(_.toInt).getOrElse(1024)
 
-  def getExecutorAttributes: Map[String, String] = {
-    subset(MesosConfig.EXECUTOR_ATTRIBUTES, true).entrySet().map(e => (e.getKey, e.getValue)).toMap
-  }
+  def containerMaxCpuCores: Double = getOption(MesosConfig.CONTAINER_MAX_CPU_CORES).map(_.toDouble).getOrElse(1)
 
-  def getPackagePath = getOption(MesosConfig.PACKAGE_PATH)
+  def containerMaxDiskMb: Int = getOption(MesosConfig.CONTAINER_MAX_DISK_MB).map(_.toInt).getOrElse(1024)
 
-  def getTaskCount: Option[Int] = getOption(MesosConfig.EXECUTOR_TASK_COUNT).map(_.toInt)
+  def containerAttributes: Map[String, String] =
+    subset(MesosConfig.CONTAINER_ATTRIBUTES, true).entrySet().map(e ⇒ e.getKey → e.getValue).toMap
 
-  def getJmxServerEnabled = getBoolean(MesosConfig.SCHEDULER_JMX_ENABLED, true)
+  def containerEnvironmentShared: Set[String] =
+    getOption(MesosConfig.CONTAINER_ENVIRONMENT_SHARED).map(_.split(",").toSet).getOrElse(Set.empty).map(_.trim)
 
-  // https://issues.apache.org/jira/browse/MESOS-1219
-  def getFailoverTimeout = getLong(MesosConfig.SCHEDULER_FAILOVER_TIMEOUT, Long.MaxValue)
+  def containerConstraintsResolvers: List[ConstraintsResolver] = get(MesosConfig.CONTAINER_CONSTRAINTS_RESOLVERS, "")
+    .split(",", -1).map(_.trim).filter(_.nonEmpty)
+    .map(Class.forName(_).newInstance().asInstanceOf[ConstraintsResolverFactory].buildResolver(config))
+    .toList
 
-  def getMasterConnect = getOption(MesosConfig.MASTER_CONNECT)
+  def packagePath = getOption(MesosConfig.PACKAGE_PATH)
 
-  def getUser = get(MesosConfig.SCHEDULER_USER, "")
+  def masterConnect = getOption(MesosConfig.MASTER_CONNECT)
 
-  def getRole = getOption(MesosConfig.SCHEDULER_ROLE)
+  def registryConnect = get(MesosConfig.REGISTRY_CONNECT, "not set")
+
+  def schedulerUser = get(MesosConfig.SCHEDULER_USER, "")
+
+  def schedulerRole = get(MesosConfig.SCHEDULER_ROLE, jobName)
+
+  def schedulerReservationEnabled = getBoolean(MesosConfig.SCHEDULER_RESERVATION_ENABLED, false)
+
+  def schedulerReservationDelay = getLong(MesosConfig.SCHEDULER_RESERVATION_DELAY, 3600000L)
+
+  def schedulerStrategy = get(MesosConfig.SCHEDULER_STRATEGY, classOf[RoundRobin].getName)
+
+  def volumesEnabled = getBoolean(MesosConfig.SCHEDULER_VOLUMES_ENABLED, false)
+
+  def volumesPath = get(MesosConfig.SCHEDULER_VOLUMES_PATH, "reserved")
 }

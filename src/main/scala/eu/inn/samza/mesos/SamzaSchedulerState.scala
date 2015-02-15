@@ -1,64 +1,110 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
-package eu.inn.samza.mesos
-
-import eu.inn.samza.mesos.MesosConfig.Config2Mesos
-import org.apache.mesos.Protos.TaskInfo
+import eu.inn.samza.mesos.SamzaSchedulerState.ScheduledTask
+import org.apache.mesos.{Protos, SchedulerDriver}
+import org.apache.mesos.Protos.{SlaveID, TaskInfo}
 import org.apache.samza.config.Config
 import org.apache.samza.coordinator.JobCoordinator
 import org.apache.samza.job.ApplicationStatus
-import org.apache.samza.job.ApplicationStatus._
 import org.apache.samza.util.Logging
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable
+import SamzaContainerState._
 
-class SamzaSchedulerState(config: Config) extends Logging {
-  @volatile var currentStatus: ApplicationStatus = New
-  var isHealthy = false
 
-  val initialTaskCount: Int = config.getTaskCount.getOrElse({
-    info("No %s specified. Defaulting to one container." format MesosConfig.EXECUTOR_TASK_COUNT)
-    1
-  })
+case class SamzaContainerId(samzaId: Int) extends AnyVal {
+  override def toString = samzaId.toString
+}
 
-  val jobCoordinator: JobCoordinator = JobCoordinator(config, initialTaskCount)
+sealed trait SamzaContainerState
+object SamzaContainerState {
+  object Unclaimed extends SamzaContainerState
+  object Pending extends SamzaContainerState
+  object Running extends SamzaContainerState
+}
 
-  val initialSamzaTaskIDs = jobCoordinator.jobModel.getContainers.keySet.map(_.toInt).toSet
+object SamzaSchedulerState extends Logging {
 
-  val tasks: Map[String, MesosTask] = initialSamzaTaskIDs.map(id => {
-    val task = new MesosTask(config, this, id)
-    (task.getMesosTaskId, task)
-  }).toMap
+  private def clock() = System.currentTimeMillis() // todo: extract
 
-  val preparedTasks: mutable.Map[String, TaskInfo] = mutable.Map()
+  // todo: refactor
 
-  val unclaimedTasks: mutable.Set[String] = mutable.Set(tasks.keys.toSeq: _*)
-  val pendingTasks: mutable.Set[String] = mutable.Set()
-  val runningTasks: mutable.Set[String] = mutable.Set()
+  class ScheduledTask(val containerId: SamzaContainerId) {
 
-  def filterTasks(ids: Seq[String]): Set[MesosTask] =
-    tasks.filterKeys(ids.contains).map(_._2).toSet
+    private var _state: SamzaContainerState = Unclaimed
+    private var _taskInfo: Option[TaskInfo] = None
+    private var _stateTimestamp = clock()
 
-  def dump() = {
-    info("Tasks state: unclaimed: %d, pending: %d, running: %d"
-      format(unclaimedTasks.size, pendingTasks.size, runningTasks.size))
+    def state = _state
+    def taskInfo = _taskInfo
+
+    override def toString = s"Container $containerId (${state.getClass.getSimpleName})"
+
+    def timeInState = clock() - _stateTimestamp
+
+    private def setState(newState: SamzaContainerState) = {
+      _state = newState
+      _stateTimestamp = clock()
+    }
+
+    def markAsUnclaimed() = {
+      setState(Unclaimed)
+      _taskInfo = None
+    }
+
+    def markAsPending(taskInfo: TaskInfo) = {
+      setState(Pending)
+      _taskInfo = Some(taskInfo)
+    }
+
+    def markAsRunning() =
+      taskInfo match {
+        case Some(_) ⇒
+          setState(Running)
+        case _ ⇒
+          throw new Exception("TaskInfo is missing")
+      }
+  }
+
+  def apply(config: Config) = {
+    new SamzaSchedulerState(JobCoordinator(config), config)
+  }
+}
+
+class SamzaSchedulerState(val jobCoordinator: JobCoordinator, config: Config) extends Logging {
+
+  @volatile var currentStatus: ApplicationStatus = ApplicationStatus.New
+
+  @volatile var isShuttingDown = false // todo: refactor
+
+  def shutdown(driver: SchedulerDriver) = {
+    isShuttingDown = true
+
+    info("Stopping coordinator")
+    jobCoordinator.stop
+
+    val prepared = tasks.flatMap(_.taskInfo).map(_.getTaskId)
+    info("Killing Mesos tasks: " + prepared.mkString)
+    prepared.foreach(driver.killTask)
+  }
+
+  def isSafeToStop = allOf(Pending).isEmpty && allOf(Running).isEmpty
+
+  def isHealthy = allOf(Unclaimed).isEmpty && allOf(Pending).isEmpty
+
+  val tasks = jobCoordinator.jobModel.getContainers
+    .keySet
+    .map(id ⇒ new ScheduledTask(SamzaContainerId(id)))
+    .toList
+
+  def allOf(state: SamzaContainerState) =
+    tasks.filter(_.state == state)
+
+  def allocations: Map[SlaveID, Set[ScheduledTask]] =
+    tasks.flatMap(t ⇒ t.taskInfo.map(ti ⇒ ti.getSlaveId → t)).groupBy(_._1).mapValues(_.map(_._2).toSet)
+
+  def taskByMesosId(id: Protos.TaskID) = tasks.find(_.taskInfo.exists(_.getTaskId == id))
+
+  override def toString = {
+    val healthy = if (isHealthy) "HEALTHY" else "NOT HEALTHY"
+    s"Job is $healthy. Tasks unclaimed: ${allOf(Unclaimed).size}, pending: ${allOf(Pending).size}, running: ${allOf(Running).size}."
   }
 }
