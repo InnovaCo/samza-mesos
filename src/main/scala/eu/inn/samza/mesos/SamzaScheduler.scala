@@ -18,11 +18,11 @@ import scala.annotation.tailrec
 
 
 class SamzaScheduler(
-  config: Config,
-  state: SamzaSchedulerState,
-  offerMapper: MesosOfferMapper,
-  registry: ZooRegistry
-) extends Scheduler with Logging {
+                      config: Config,
+                      state: SamzaSchedulerState,
+                      offerMapper: MesosOfferMapper,
+                      registry: ZooRegistry
+                    ) extends Scheduler with Logging {
 
   private val UnhealthyOfferRefuseSeconds = 1
   private val HealthyOfferRefuseSeconds = 5
@@ -36,9 +36,8 @@ class SamzaScheduler(
     info(state)
   }
 
-  def reregistered(driver: SchedulerDriver, master: MasterInfo): Unit = {
+  def reregistered(driver: SchedulerDriver, master: MasterInfo): Unit =
     info("Samza framework re-registered")
-  }
 
   private def launch(driver: SchedulerDriver, offer: Offer, tasks: Map[ScheduledTask, TaskInfo]) = {
     info(s"Assigning ${tasks.size} tasks to offer ${offer.getId.getValue}.")
@@ -199,9 +198,9 @@ class SamzaScheduler(
         state.taskByMesosId(taskId).foreach(_.markAsRunning())
 
       case TaskState.TASK_FAILED
-         | TaskState.TASK_FINISHED
-         | TaskState.TASK_KILLED
-         | TaskState.TASK_LOST ⇒
+           | TaskState.TASK_FINISHED
+           | TaskState.TASK_KILLED
+           | TaskState.TASK_LOST ⇒
         state.taskByMesosId(taskId).foreach(_.markAsUnclaimed())
 
       case TaskState.TASK_ERROR ⇒
@@ -214,28 +213,19 @@ class SamzaScheduler(
     info(state)
   }
 
-  def frameworkMessage(driver: SchedulerDriver,
-                       executor: ExecutorID,
-                       slave: SlaveID,
-                       data: Array[Byte]): Unit = {
+  def frameworkMessage(driver: SchedulerDriver, executor: ExecutorID, slave: SlaveID, data: Array[Byte]): Unit = {
+
   }
 
-  def disconnected(driver: SchedulerDriver): Unit = {
+  def disconnected(driver: SchedulerDriver): Unit =
     info("Framework has been disconnected")
-  }
 
-  def slaveLost(driver: SchedulerDriver, slave: SlaveID): Unit = {
-    info("A slave %s has been lost" format slave.getValue)
-  }
+  def slaveLost(driver: SchedulerDriver, slave: SlaveID): Unit =
+    info(s"A slave ${slave.getValue} has been lost")
 
-  def executorLost(driver: SchedulerDriver,
-                   executor: ExecutorID,
-                   slave: SlaveID,
-                   status: Int): Unit = {
-    info("An executor %s on slave %s has been lost." format(executor.getValue, slave.getValue))
-  }
+  def executorLost(driver: SchedulerDriver, executor: ExecutorID, slave: SlaveID, status: Int): Unit =
+    info(s"An executor ${executor.getValue} on slave ${slave.getValue} has been lost.")
 
-  def error(driver: SchedulerDriver, error: String) {
-    info("Error reported: %s" format error)
-  }
+  def error(driver: SchedulerDriver, error: String): Unit =
+    info(s"Error reported: $error")
 }

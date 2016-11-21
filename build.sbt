@@ -1,43 +1,68 @@
-organization := "eu.inn"
+import java.util.Properties
 
-name := "samza-mesos"
+val samzaVersion = "0.10.0"
 
-version := "0.2"
+val appProperties = {
+  val prop = new Properties()
+  IO.load(prop, new File("project/version.properties"))
+  prop
+}
 
-scalaVersion := "2.11.8"
-
-scalacOptions ++= Seq(
-  "-language:postfixOps",
-  "-language:implicitConversions",
-  "-feature",
-  "-deprecation",
-  "-unchecked",
-  "-optimise",
-  "-target:jvm-1.8",
-  "-encoding", "UTF-8"
+val commonSettings = Seq(
+  organization := "eu.inn",
+  version := appProperties.getProperty("version"),
+  scalaVersion := "2.10.6",
+  crossScalaVersions := Seq("2.10.6"),
+  resolvers ++= Seq(
+    "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/",
+    "Sonatype Releases"  at "http://oss.sonatype.org/content/repositories/releases"
+  ),
+  libraryDependencies ++= Seq(
+    "org.apache.samza"  %%  "samza-core"  % samzaVersion,
+    "org.apache.samza"  %   "samza-api"   % samzaVersion,
+    "org.apache.mesos"  %   "mesos"       % "1.0.1",
+    "com.101tec"        %   "zkclient"    % "0.3",
+    "org.scalatest"     %%  "scalatest"   % "2.2.1" % "test"
+  ),
+  publishMavenStyle := true,
+  publishTo := {
+    val nexus = "https://oss.sonatype.org/"
+    if (isSnapshot.value)
+      Some("snapshots" at nexus + "content/repositories/snapshots")
+    else
+      Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+  },
+  licenses := Seq("Apache 2" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt")),
+  homepage := Some(url("https://github.com/innovaco/samza-mesos")),
+  pomExtra := {
+    <scm>
+      <url>https://github.com/innovaco/samza-mesos</url>
+      <connection>scm:git:git@github.com:innovaco/samza-mesos.git</connection>
+    </scm>
+    <developers>
+      <developer>
+        <id>kostassoid</id>
+        <name>Konstantin Alexandroff</name>
+        <url>http://inn.ru</url>
+      </developer>
+    </developers>
+  }
 )
 
-javacOptions ++= Seq(
-  "-source", "1.8",
-  "-target", "1.8",
-  "-encoding", "UTF-8",
-  "-Xlint:unchecked",
-  "-Xlint:deprecation"
-)
+lazy val `samza-mesos` = (project in file(".")).
+  settings(commonSettings: _*).
+  settings(
+    name := "samza-mesos"
+  )
 
-publishTo := Some("Innova libs repo" at "http://repproxy.srv.inn.ru/artifactory/libs-release-local")
-
-credentials += Credentials(Path.userHome / ".ivy2" / ".innova_credentials")
-
-resolvers ++= Seq(
-  "Innova releases" at "http://repproxy.srv.inn.ru/artifactory/libs-release-local",
-  "Innova ext releases" at "http://repproxy.srv.inn.ru/artifactory/ext-release-local"
-)
-
-libraryDependencies ++= Seq(
-  "org.apache.samza"  %%  "samza-core"  % "0.10.0-inn3",
-  "org.apache.samza"  %   "samza-api"   % "0.10.0-inn3",
-  "org.apache.mesos"  %   "mesos"       % "1.0.1",
-  "com.101tec"        %   "zkclient"    % "0.3",
-  "org.scalatest"     %%  "scalatest"   % "2.2.1" % "test"
-)
+lazy val demo = (project in file("./demo")).
+  settings(commonSettings: _*).
+  settings(
+    libraryDependencies ++= Seq(
+      "ch.qos.logback" % "logback-classic" % "1.1.7"
+    )
+  ).
+  settings(
+    name := "samza-mesos-demo"
+  ).
+  dependsOn(`samza-mesos`)

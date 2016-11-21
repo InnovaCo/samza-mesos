@@ -1,3 +1,5 @@
+package eu.inn.samza.mesos
+
 import eu.inn.samza.mesos.SamzaSchedulerState.ScheduledTask
 import org.apache.mesos.{Protos, SchedulerDriver}
 import org.apache.mesos.Protos.{SlaveID, TaskInfo}

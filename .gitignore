@@ -11,3 +11,4 @@
 *.ear
 */.cache
 target/
+.history

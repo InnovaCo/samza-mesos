@@ -26,8 +26,9 @@ object MesosConfig {
   val SCHEDULER_VOLUMES_PATH              = "mesos.volumes.path"
   val SCHEDULER_STRATEGY                  = "mesos.strategy"
 
-  implicit def Config2Mesos(config: Config) = new MesosConfig(config)
+  implicit def config2Mesos(config: Config): MesosConfig = new MesosConfig(config)
 }
+
 
 class MesosConfig(config: Config) extends JobConfig(config) {
 

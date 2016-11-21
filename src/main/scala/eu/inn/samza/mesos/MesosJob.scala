@@ -1,7 +1,5 @@
 package eu.inn.samza.mesos
 
-import eu.inn.samza.mesos.MesosConfig.Config2Mesos
-import eu.inn.samza.mesos.mapping.{DefaultResourceMappingStrategy, TaskOfferMapper}
 import org.apache.mesos.MesosSchedulerDriver
 import org.apache.mesos.Protos.{FrameworkID, FrameworkInfo}
 import org.apache.samza.config.Config
@@ -16,21 +14,11 @@ class MesosJob(config: Config) extends StreamJob with Logging {
 
   val state = SamzaSchedulerState(config)
 
-  private lazy val version = System.currentTimeMillis()
-
-  sys.addShutdownHook {
-    info("Termination signal received. Shutting down.")
-    kill
-  }
-
-  def getStatus: ApplicationStatus = {
-    state.currentStatus
-  }
-
-  def getFrameworkInfo: FrameworkInfo = {
+  val frameworkInfo = {
     val frameworkName = config.getName.get
+
     val frameworkId = FrameworkID.newBuilder
-      .setValue("%s-%d" format(frameworkName, version))
+      .setValue(s"$frameworkName-$version")
       .build
 
     FrameworkInfo.newBuilder
@@ -47,9 +35,9 @@ class MesosJob(config: Config) extends StreamJob with Logging {
 
     val initialConstraints = ResourceConstraints(
       Map(
-      "cpus" → config.containerMaxCpuCores,
-      "mem" → config.containerMaxMemoryMb,
-      "disk" → config.containerMaxDiskMb
+        "cpus" → config.containerMaxCpuCores,
+        "mem" → config.containerMaxMemoryMb,
+        "disk" → config.containerMaxDiskMb
       ),
       config.containerAttributes
     )
@@ -82,6 +70,8 @@ class MesosJob(config: Config) extends StreamJob with Logging {
     }
   }
 
+  def getStatus: ApplicationStatus = state.currentStatus
+
   def kill: StreamJob = {
     info("Killing current job")
 
@@ -105,26 +95,18 @@ class MesosJob(config: Config) extends StreamJob with Logging {
 
   def submit: StreamJob = {
     info("Submitting new job")
+
     state.jobCoordinator.start
     driver.start()
     state.currentStatus = ApplicationStatus.Running
     this
   }
 
-  def waitForFinish(timeoutMs: Long): ApplicationStatus = {
-    val startTimeMs = System.currentTimeMillis()
+  def waitForFinish(timeoutMs: Long): ApplicationStatus =
+    checkStatus(System.currentTimeMillis, timeoutMs)(s ⇒ s == SuccessfulFinish || s == UnsuccessfulFinish)
 
-    while (System.currentTimeMillis() - startTimeMs < timeoutMs) {
-      Option(getStatus) match {
-        case Some(s) => if (SuccessfulFinish.equals(s) || UnsuccessfulFinish.equals(s)) return s
-        case None =>
-      }
-
-      Thread.sleep(1000)
-    }
-
-    Running
-  }
+  def waitForStatus(status: ApplicationStatus, timeoutMs: Long): ApplicationStatus =
+    checkStatus(System.currentTimeMillis(), timeoutMs)(_ == status)
 
   @annotation.tailrec
   private def checkStatus(startTimeMs: Long, timeoutMs: Long)(predicate: ApplicationStatus ⇒ Boolean): ApplicationStatus = {
